@@ -5,7 +5,7 @@ import time
 import pytz
 
 TOKEN = "6225315802:AAHFxCXsAix1DW9DBYx2rOA-8xekLHqkGh8"
-chat_ids = ["818648134"]  # TODO: add Luca chat_id con RAW DATA BOT
+chat_ids = ["YOUR_TELEGRAM_CHAT_ID"]  # https://www.alphr.com/find-chat-id-telegram/
 
 
 def run(vinted, order, price_to, currency, number_of_items, page):
