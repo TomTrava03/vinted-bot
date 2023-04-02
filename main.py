@@ -1,38 +1,65 @@
+#!/usr/bin/env python
+
 from pyVinted import Vinted
 import requests
 from datetime import datetime
 import time
 import pytz
+import threading
 
-TOKEN = "6225315802:AAHFxCXsAix1DW9DBYx2rOA-8xekLHqkGh8"
-chat_ids = ["818648134"]  # TODO: add Luca chat_id con RAW DATA BOT
+TOKEN = "6225315802:AAHFxCXsAix1DW9DBYx2rOA-8xekLHqkGh8"  # TODO: check bot name, image profile and description
+chat_ids = ["818648134"]  # "349965380": Luca
 
 
-def run(vinted, order, price_to, currency, number_of_items, page):
-    logs = open("logs.txt", "a")
+class Filter:
+    def __init__(self, brand_id, price_to, sizes, other):
+        self.brand_id = brand_id
+        self.price_to = price_to
+        self.sizes = sizes  # TODO: DICTIONARY
+        self.other = other
+
+    def __str__(self):
+        url = f"https://www.vinted.it/vetement?order=newest_first&price_to={self.price_to}&currency=EUR&brand_id[]={self.brand_id}"
+        for size in self.sizes:
+            url += f"&size_id[]={size}"
+        url += self.other
+        return url  # f"https://www.vinted.it/vetement?order=newest_first&price_to={url.price_to}&currency=EUR"
+
+
+def sendMessage(clock, item):
+    for chat_id in chat_ids:
+        message = f"ITEM: {item.title}\nPRICE: {item.price}€\nURL: {item.url}\n"
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        try:
+            logs = open("logs.txt", "a")
+            response = requests.post(url, json={'chat_id': chat_id, 'text': message})
+            log = f"LOG[{clock}]: " + response.text + "\n"
+            logs.write(log)
+        except Exception as e:
+            print(f"ERROR on REQUEST[{clock}]: " + str(e))
+
+
+def run(vinted, filter):
+    global last_item
     first_iteration = True
     while True:  # TODO: check if first item is different from before and then lower time.sleep()
         clock = datetime.now(pytz.timezone('Europe/Rome')).strftime("%d/%m/%Y %H:%M:%S")
 
         try:
-            items_list = vinted.items.search(
-                f"https://www.vinted.it/vetement?order={order}&price_to={price_to}&currency={currency}",
-                number_of_items, page)  # TODO: da cambiare in caso altre variabili
-            print(f"ITEM[{clock}]: "+items_list[0].title+" "+items_list[0].price+"€")
-            current_item = items_list[0]
+            url = filter.__str__()
+            print(f"SEARCHING FOR: {filter.brand_id} ")
+            items_list = vinted.items.search(url, 1, 1)
+            item = items_list[0]
             if first_iteration:
-                last_item = items_list[0]
-            elif current_item != last_item:  # TODO: sistemare current_item and last_item
-                last_item = current_item
-                for chat_id in chat_ids:
-                    message = f"OGGETTO: {items_list[0].title}\nPREZZO: {items_list[0].price}€\nURL: {items_list[0].url}"
-                    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-                    try:
-                        response = requests.post(url, json={'chat_id': chat_id, 'text': message})
-                        log = f"LOG[{clock}]: " + response.text + "\n"
-                        logs.write(log)
-                    except Exception as e:
-                        print(f"ERROR on REQUEST[{clock}]: " + str(e))
+                print(f"FOUND ITEM[{clock}]: " + item.title + " " + item.price + "€")
+                sendMessage(clock, item)
+                first_iteration = False
+                last_item = item
+            elif last_item.title != item.title:
+                print(f"FOUND ITEM[{clock}]: " + item.title + " " + item.price + "€")
+                sendMessage(clock, item)
+                last_item = item
+
         except Exception as e:
             print(f"ERROR on SEARCH[{clock}]: " + str(e))
         time.sleep(30)
@@ -41,13 +68,23 @@ def run(vinted, order, price_to, currency, number_of_items, page):
 def init():  # where to initialize variables
     vinted = Vinted()
 
-    order = "newest_first"  # Vinted URL variables  # TODO: GUI for this variables
-    price_to = 60
-    currency = "EUR"
-    number_of_items = 1
-    page = 1
+    filters = []  # TODO: add class or object filter to an ARRAY
+    # Vinted URL variables  # TODO: GUI for this variables
+    price_to = 35
+    brand_id = 38923  # GOLDEN GOOSE
+    sizes = {57: 37, 58: 38, 59: 39, 60: 40, 61: 41, 62: 42, 63: 43,
+             776: 38, 778: 39, 780: 40, 782: 41, 784: 42, 786: 43, 788: 44, 790: 45, 792: 46,
+             794: 47, 1190: 48, 1191: 49
+             }  # it's size_id: size ex. 57(size 37 for woman) 776(size 38 for man)
+    filters.append(Filter(brand_id, price_to, sizes, ""))
+    price_to = 40
+    brand_id = 1281  # PINKO
+    other = "&catalog[]=19"  # bags
+    filters.append(Filter(brand_id, price_to, sizes, other))
 
-    run(vinted, order, price_to, currency, number_of_items, page)
+    threading.Thread(target=run, args=(vinted, filters[0])).start()
+    threading.Thread(target=run, args=(vinted, filters[1])).start()
+    # run(vinted, Filter(brand_id, price_to, sizes, ""))
 
 
 if __name__ == '__main__':
