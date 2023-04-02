@@ -11,3 +11,5 @@ resquester.py changes:
 settings.py changes:
 
     VINTED_API_URL = f"https://www.vinted.it/api/v
+    
+Remember to change the .it to wherever you're located. (ex. italy = .it, france = .fr)
