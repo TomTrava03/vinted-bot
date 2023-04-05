@@ -8,7 +8,6 @@ import pytz
 import threading
 
 TOKEN = "6225315802:AAHFxCXsAix1DW9DBYx2rOA-8xekLHqkGh8"  # TODO: check bot name, image profile and description
-chat_ids = ["818648134"]  # "349965380": Luca
 
 
 class Filter:
@@ -26,23 +25,22 @@ class Filter:
         return url  # f"https://www.vinted.it/vetement?order=newest_first&price_to={url.price_to}&currency=EUR"
 
 
-def sendMessage(clock, item):
-    for chat_id in chat_ids:
-        message = f"ITEM: {item.title}\nPRICE: {item.price}€\nURL: {item.url}\n"
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        try:
-            logs = open("logs.txt", "a")
-            response = requests.post(url, json={'chat_id': chat_id, 'text': message})
-            log = f"LOG[{clock}]: " + response.text + "\n"
-            logs.write(log)
-        except Exception as e:
-            print(f"ERROR on REQUEST[{clock}]: " + str(e))
+def sendMessage(clock, item, chat_id):
+    message = f"ITEM: {item.title}\nPRICE: {item.price}€\nURL: {item.url}\n"
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    try:
+        logs = open("logs.txt", "a")
+        response = requests.post(url, json={'chat_id': chat_id, 'text': message})
+        log = f"LOG[{clock}]: " + response.text + "\n"
+        logs.write(log)
+    except Exception as e:
+        print(f"ERROR on REQUEST[{clock}]: " + str(e))
 
 
-def run(vinted, filter):
+def run(vinted, filter, chat_id):
     global last_item
     first_iteration = True
-    while True:  # TODO: check if first item is different from before and then lower time.sleep()
+    while True:
         clock = datetime.now(pytz.timezone('Europe/Rome')).strftime("%d/%m/%Y %H:%M:%S")
 
         try:
@@ -52,12 +50,12 @@ def run(vinted, filter):
             item = items_list[0]
             if first_iteration:
                 print(f"FOUND ITEM[{clock}]: " + item.title + " " + item.price + "€")
-                sendMessage(clock, item)
+                sendMessage(clock, item, chat_id)
                 first_iteration = False
                 last_item = item
             elif last_item.title != item.title:
                 print(f"FOUND ITEM[{clock}]: " + item.title + " " + item.price + "€")
-                sendMessage(clock, item)
+                sendMessage(clock, item, chat_id)
                 last_item = item
 
         except Exception as e:
@@ -66,9 +64,11 @@ def run(vinted, filter):
 
 
 def init():  # where to initialize variables
+    print("Write your Telegram Chat-id here: ")
+    chat_id = input()
     vinted = Vinted()
 
-    filters = []  # TODO: add class or object filter to an ARRAY
+    filters = []
     # Vinted URL variables  # TODO: GUI for this variables
     price_to = 35
     brand_id = 38923  # GOLDEN GOOSE
@@ -82,8 +82,8 @@ def init():  # where to initialize variables
     other = "&catalog[]=19"  # bags
     filters.append(Filter(brand_id, price_to, sizes, other))
 
-    threading.Thread(target=run, args=(vinted, filters[0])).start()
-    threading.Thread(target=run, args=(vinted, filters[1])).start()
+    threading.Thread(target=run, args=(vinted, filters[0], chat_id)).start()
+    threading.Thread(target=run, args=(vinted, filters[1], chat_id)).start()
     # run(vinted, Filter(brand_id, price_to, sizes, ""))
 
 
