@@ -1,91 +1,59 @@
-#!/usr/bin/env python
-
-from pyVinted import Vinted
-import requests
-from datetime import datetime
-import time
+import sys
 import pytz
-import threading
 
-TOKEN = "6225315802:AAHFxCXsAix1DW9DBYx2rOA-8xekLHqkGh8"  # TODO: check bot name, image profile and description
+from discord import Webhook
+import aiohttp
+import asyncio
 
+# EXAMPLE for vinted.it url: https://www.vinted.it/catalog?order=newest_first&price_to=60&currency=EUR&brand_id[]=1281&catalog[]=19
 
-class Filter:
-    def __init__(self, brand_id, price_to, sizes, other):
-        self.brand_id = brand_id
-        self.price_to = price_to
-        self.sizes = sizes  # TODO: DICTIONARY
-        self.other = other
+# GLOBAL VARIABLES #
+vinted = Vinted()
 
-    def __str__(self):
-        url = f"https://www.vinted.it/vetement?order=newest_first&price_to={self.price_to}&currency=EUR&brand_id[]={self.brand_id}"
-        for size in self.sizes:
-            url += f"&size_id[]={size}"
-        url += self.other
-        return url  # f"https://www.vinted.it/vetement?order=newest_first&price_to={url.price_to}&currency=EUR"
-
-
-def sendMessage(clock, item, chat_id):
-    message = f"ITEM: {item.title}\nPRICE: {item.price}€\nURL: {item.url}\n"
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    try:
+def write_log(clock, message): # Log FILE
+    try:     
         logs = open("logs.txt", "a")
-        response = requests.post(url, json={'chat_id': chat_id, 'text': message})
-        log = f"LOG[{clock}]: " + response.text + "\n"
+        log = f"LOG[{clock}]: " + message
         logs.write(log)
     except Exception as e:
-        print(f"ERROR on REQUEST[{clock}]: " + str(e))
+        print(f"ERROR on MODIFYING LOG file {clock}]: " + str(e))
 
+async def send_to_discord(clock, message): # Discord WEBHOOK
+    # message = f"ITEM: {item.title}\nPRICE: {item.price}€\nURL: {item.url}\n"
+    async with aiohttp.ClientSession() as session:
+        webhook = Webhook.from_url(url_discord, session=session)
+        await webhook.send(message, username='vinted-bot')
 
-def run(vinted, filter, chat_id):
-    global last_item
+def run(url):
+
+    old_items = set()
     first_iteration = True
+
     while True:
         clock = datetime.now(pytz.timezone('Europe/Rome')).strftime("%d/%m/%Y %H:%M:%S")
-
+        
         try:
-            url = filter.__str__()
-            print(f"SEARCHING FOR: {filter.brand_id} ")
-            items_list = vinted.items.search(url, 1, 1)
-            item = items_list[0]
-            if first_iteration:
-                print(f"FOUND ITEM[{clock}]: " + item.title + " " + item.price + "€")
-                sendMessage(clock, item, chat_id)
-                first_iteration = False
-                last_item = item
-            elif last_item.title != item.title:
-                print(f"FOUND ITEM[{clock}]: " + item.title + " " + item.price + "€")
-                sendMessage(clock, item, chat_id)
-                last_item = item
+            new_items = set(vinted.items.search(url, 10, 1))
+        except requests.ConnectionError, e:
+            print(f"Errore[{clock}]: "e)
 
-        except Exception as e:
-            print(f"ERROR on SEARCH[{clock}]: " + str(e))
-        time.sleep(30)
+        print(f"\nDebugging: {clock}")
+        for element in new_items:
+            print(element.title)
 
+        tmp = new_items.difference(old_items) 
+        old_items = new_items #
 
-def init():  # where to initialize variables
-    print("Write your Telegram Chat-id here: ")
-    chat_id = input()
-    vinted = Vinted()
+        for element in tmp:
+            message = f"ITEM: {element.title}\nPRICE: {element.price}€\nURL: {element.url}\n"
+            # print(message)
+            asyncio.run(send_to_discord(clock, message))
+            write_log(clock, message)
+        
+        time.sleep(300)
 
-    filters = []
-    # Vinted URL variables  # TODO: GUI for this variables
-    price_to = 35
-    brand_id = 38923  # GOLDEN GOOSE
-    sizes = {57: 37, 58: 38, 59: 39, 60: 40, 61: 41, 62: 42, 63: 43,
-             776: 38, 778: 39, 780: 40, 782: 41, 784: 42, 786: 43, 788: 44, 790: 45, 792: 46,
-             794: 47, 1190: 48, 1191: 49
-             }  # it's size_id: size ex. 57(size 37 for woman) 776(size 38 for man)
-    filters.append(Filter(brand_id, price_to, sizes, ""))
-    price_to = 40
-    brand_id = 1281  # PINKO
-    other = "&catalog[]=19"  # bags
-    filters.append(Filter(brand_id, price_to, sizes, other))
-
-    threading.Thread(target=run, args=(vinted, filters[0], chat_id)).start()
-    threading.Thread(target=run, args=(vinted, filters[1], chat_id)).start()
-    # run(vinted, Filter(brand_id, price_to, sizes, ""))
-
+def init(): 
+    run(sys.argv[1])
 
 if __name__ == '__main__':
     init()
